@@ -15,6 +15,12 @@ let lives = 3;
 let speedMultiplier = 1;
 let animationId;
 
+const REPEL_RADIUS = 175;
+
+function distance(x1, y1, x2, y2) {
+    return Math.hypot(x2 - x1, y2 - y1);
+}
+
 // dicas de prevenção que aparecerão na tela de fim de jogo
 const preventionTips = [
     'Mantenha o ambiente limpo e livre de lixo para não atrair mosquitos.',
@@ -53,6 +59,29 @@ repellentImage.onerror = () => {
     }
 };
 
+//dog image
+let dogImage = new Image();
+let dogImageLoaded = false;
+dogImage.src = 'assets/dog.png';
+dogImage.onload = () => { dogImageLoaded = true; };
+dogImage.onerror = () => {
+    // try unaccented fallback
+    if (dogImage.src.indexOf('dog.png') !== -1) {
+        dogImage.src = 'assets/dog.png';
+    }
+}
+// mosquito image
+let mosquitoImage = new Image();
+let mosquitoImageLoaded = false;
+mosquitoImage.src = 'assets/mosquito.png';
+mosquitoImage.onload = () => { mosquitoImageLoaded = true; };
+mosquitoImage.onerror = () => {
+    // try unaccented fallback
+    if (mosquitoImage.src.indexOf('mosquito.png') !== -1) {
+        mosquitoImage.src = 'assets/mosquito.png';
+    }
+}
+
 // Resize
 function resizeCanvas() {
     canvas.width = window.innerWidth;
@@ -64,113 +93,124 @@ resizeCanvas();
 // Classes
 class Player {
     constructor() {
-        this.width = 60;
-        this.height = 60;
+        this.width = 90;
+        this.height = 90;
         this.x = canvas.width / 2 - this.width / 2;
         this.y = canvas.height - 120;
         this.targetX = this.x;
+
+        this.velocityX = 0;
+        this.rotation = 0;
+
+        this.hitboxWidth = this.width * 0.6;
+        this.hitboxHeight = this.height * 0.6;
     }
 
     draw() {
-        // Corpo
-        ctx.fillStyle = '#8B4513';
-        ctx.beginPath();
-        ctx.roundRect(this.x, this.y, this.width, this.height, 10);
-        ctx.fill();
+        ctx.save();
 
-        // Orelhas
-        ctx.fillStyle = '#5D2906';
-        ctx.beginPath();
-        ctx.ellipse(this.x + 10, this.y + 10, 8, 15, -0.3, 0, Math.PI * 2);
-        ctx.ellipse(this.x + this.width - 10, this.y + 10, 8, 15, 0.3, 0, Math.PI * 2);
-        ctx.fill();
+        // move para o centro do player
+        ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
 
-        // Focinho
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.ellipse(this.x + this.width/2, this.y + this.height - 10, 12, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
+        // aplica rotação
+        ctx.rotate(this.rotation);
 
-        // Olhos
-        ctx.fillStyle = '#FFF';
-        ctx.beginPath();
-        ctx.arc(this.x + 18, this.y + 25, 6, 0, Math.PI * 2);
-        ctx.arc(this.x + this.width - 18, this.y + 25, 6, 0, Math.PI * 2);
-        ctx.fill();
+        if (dogImageLoaded) {
+            ctx.drawImage(
+                dogImage,
+                -this.width / 2,
+                -this.height / 2,
+                this.width,
+                this.height
+            );
+        }
 
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.arc(this.x + 18, this.y + 25, 3, 0, Math.PI * 2);
-        ctx.arc(this.x + this.width - 18, this.y + 25, 3, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.restore();
     }
 
     update(targetX) {
-        // Suavização
         this.targetX = targetX - this.width / 2;
         this.targetX = Math.max(0, Math.min(this.targetX, canvas.width - this.width));
-        this.x += (this.targetX - this.x) * 0.2;
+
+        // calcula velocidade
+        this.velocityX = (this.targetX - this.x) * 0.15;
+
+        // aplica movimento
+        this.x += this.velocityX;
+
+        // rotação baseada na velocidade
+        this.rotation = this.velocityX * 0.03;
+    }
+
+    getHitbox() {
+        return {
+            x: this.x + (this.width - this.hitboxWidth) / 2,
+            y: this.y + (this.height - this.hitboxHeight) / 2,
+            width: this.hitboxWidth,
+            height: this.hitboxHeight
+        };
     }
 }
 
 class Mosquito {
     constructor() {
-        this.width = 30;
-        this.height = 15;
+        this.width = 50;
+        this.height = 50;
+
         this.x = Math.random() * (canvas.width - this.width);
-        this.y = -50;
-        this.speed = (Math.random() * 3 + 2.5) * speedMultiplier;
-        this.wingPhase = Math.random() * Math.PI * 2;
+        this.y = -this.height;
+
+        this.baseSpeed = (Math.random() * 2 + 2);
+        this.speed = this.baseSpeed * speedMultiplier;
+
+        this.angle = Math.random() * Math.PI * 2;
+        this.rotation = 0;
+        this.rotationSpeed = 0;
+
+        this.hitboxWidth = this.width * 0.6;
+        this.hitboxHeight = this.height * 0.6;
     }
 
     draw() {
-        this.wingPhase += 0.5;
-        
         ctx.save();
-        ctx.translate(this.x + this.width/2, this.y + this.height/2);
-        
-        // Asas vibrando
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-        for(let i = 0; i < 2; i++) {
-            ctx.beginPath();
-            ctx.ellipse(i === 0 ? -8 : 8, -5, 15, 6, Math.sin(this.wingPhase) * 0.5, 0, Math.PI * 2);
-            ctx.fill();
+
+        ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+        ctx.rotate(this.rotation);
+
+        if (mosquitoImageLoaded) {
+            ctx.drawImage(
+                mosquitoImage,
+                -this.width / 2,
+                -this.height / 2,
+                this.width,
+                this.height
+            );
         }
-
-        // Corpo
-        ctx.fillStyle = '#D2B48C'; // Cor palha
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 18, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Pernas
-        ctx.strokeStyle = '#8B4513';
-        ctx.lineWidth = 1;
-        for(let i = -1; i <= 1; i++) {
-            ctx.beginPath();
-            ctx.moveTo(i * 6, 5);
-            ctx.lineTo(i * 10, 15);
-            ctx.stroke();
-        }
-
-        // Probóscide (ferrão)
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(15, 0);
-        ctx.lineTo(25, 2);
-        ctx.stroke();
 
         ctx.restore();
     }
 
     update() {
+        // cai para baixo
         this.y += this.speed;
-        // Movimento em zigue-zague
-        this.x += Math.sin(this.y * 0.02) * 1.5;
+
+        // zigue-zague horizontal
+        this.angle += 0.05;
+        this.x += Math.sin(this.angle) * 0.5;
+
+        // rotação leve
+        this.rotation = Math.sin(this.angle) * 0.2;
+    }
+
+    getHitbox() {
+        return {
+            x: this.x + (this.width - this.hitboxWidth) / 2,
+            y: this.y + (this.height - this.hitboxHeight) / 2,
+            width: this.hitboxWidth,
+            height: this.hitboxHeight
+        };
     }
 }
-
 class Repellent {
     constructor() {
         this.width = 70;
@@ -179,15 +219,18 @@ class Repellent {
         this.y = -50;
         this.speed = 4 * speedMultiplier;
         this.rotation = 0;
+
+        this.hitboxWidth = this.width * 0.7;
+        this.hitboxHeight = this.height * 0.7;
     }
 
     draw() {
         this.rotation += 0.05;
-        
+
         ctx.save();
-        ctx.translate(this.x + this.width/2, this.y + this.height/2);
+        ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
         ctx.rotate(this.rotation);
-        
+
         if (repellentImageLoaded) {
             // draw the repellent sprite centered
             ctx.drawImage(repellentImage, -this.width / 2, -this.height / 2, this.width, this.height);
@@ -220,6 +263,15 @@ class Repellent {
     update() {
         this.y += this.speed;
     }
+
+    getHitbox() {
+        return {
+            x: this.x + (this.width - this.hitboxWidth) / 2,
+            y: this.y + (this.height - this.hitboxHeight) / 2,
+            width: this.hitboxWidth,
+            height: this.hitboxHeight
+        };
+    }
 }
 
 // gadget osso dá vida extra até máximo de 3
@@ -232,6 +284,9 @@ class Bone {
         this.speed = 3 * speedMultiplier;
         this.rotation = Math.random() * Math.PI * 2;
         this.spin = (Math.random() * 0.12 + 0.04) * (Math.random() < 0.5 ? -1 : 1);
+
+        this.hitboxWidth = this.width * 0.6;
+        this.hitboxHeight = this.height * 0.6;
     }
 
     draw() {
@@ -273,6 +328,15 @@ class Bone {
         // slight horizontal sway
         this.x += Math.sin(this.y * 0.02) * 0.5;
     }
+
+    getHitbox() {
+        return {
+            x: this.x + (this.width - this.hitboxWidth) / 2,
+            y: this.y + (this.height - this.hitboxHeight) / 2,
+            width: this.hitboxWidth,
+            height: this.hitboxHeight
+        };
+    }
 }
 
 // Variáveis de jogo
@@ -300,12 +364,12 @@ window.addEventListener('touchstart', (e) => {
 });
 
 window.addEventListener('mousemove', (e) => {
-    if(gameRunning && !isPaused) handleInput(e.clientX);
+    if (gameRunning && !isPaused) handleInput(e.clientX);
 });
 
 // Pause
 pauseBtn.addEventListener('click', () => {
-    if(gameRunning && !isPaused) {
+    if (gameRunning && !isPaused) {
         isPaused = true;
         pauseScreen.classList.remove('hidden');
         updatePauseIcon();
@@ -415,6 +479,7 @@ function gameLoop(timestamp) {
     updateEffects();
 
     animationId = requestAnimationFrame(gameLoop);
+
 }
 
 function drawBackground() {
@@ -465,7 +530,7 @@ function drawBackground() {
     // Nuvens
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     const time = Date.now() * 0.0001;
-    for(let i=0; i<3; i++) {
+    for (let i = 0; i < 3; i++) {
         let nx = ((i * 200) + time * 50) % (canvas.width + 100) - 50;
         ctx.beginPath();
         ctx.arc(nx, 80, 30, 0, Math.PI * 2);
@@ -481,36 +546,83 @@ let effects = [];
 function checkCollisions() {
     // Mosquito
     enemies.forEach((e, i) => {
-        if (rectIntersect(player.x, player.y, player.width, player.height,
-                          e.x, e.y, e.width, e.height)) {
+
+        const p = player.getHitbox();
+        const m = e.getHitbox();
+
+        if (rectIntersect(
+            p.x, p.y, p.width, p.height,
+            m.x, m.y, m.width, m.height
+        )) {
             lives--;
             enemies.splice(i, 1);
             updateHUD();
             screenShake();
-            createEffect(player.x + player.width/2, player.y + player.height/2, 'hit');
+            createEffect(player.x + player.width / 2, player.y + player.height / 2, 'hit');
+
             if (lives <= 0) gameOver();
         }
     });
 
     // Repelente
-    items.forEach((item, i) => {
-        if (rectIntersect(player.x, player.y, player.width, player.height,
-                          item.x, item.y, item.width, item.height)) {
+    items.forEach((item, itemIndex) => {
+
+        const p = player.getHitbox();
+        const r = item.getHitbox();
+
+        if (rectIntersect(
+            p.x, p.y, p.width, p.height,
+            r.x, r.y, r.width, r.height
+        )) {
+
+            // remove o repelente
+            items.splice(itemIndex, 1);
+
+            const blastX = item.x + item.width / 2;
+            const blastY = item.y + item.height / 2;
+
+            // ✅ ganha +10 ao pegar
             score += 10;
-            items.splice(i, 1);
+
+            createEffect(blastX, blastY, 'collect');
+            createEffect(blastX, blastY, 'repelBlast');
+
+            // 🔥 LOOP REVERSO PARA NÃO CRASHAR
+            for (let i = enemies.length - 1; i >= 0; i--) {
+
+                const e = enemies[i];
+
+                const mx = e.x + e.width / 2;
+                const my = e.y + e.height / 2;
+
+                if (distance(blastX, blastY, mx, my) <= REPEL_RADIUS) {
+
+                    score += 5;
+
+                    createEffect(mx, my, 'mosquitoDeath');
+                    createEffect(mx, my, 'plusFive');
+
+                    enemies.splice(i, 1);
+                }
+            }
+
             updateHUD();
-            createEffect(item.x + item.width/2, item.y + item.height/2, 'collect');
         }
     });
     // Osso
     bones.forEach((b, i) => {
-        if (rectIntersect(player.x, player.y, player.width, player.height,
-                          b.x, b.y, b.width, b.height)) {
+        const p = player.getHitbox();
+        const boneHB = b.getHitbox();
+
+        if (rectIntersect(
+            p.x, p.y, p.width, p.height,
+            boneHB.x, boneHB.y, boneHB.width, boneHB.height
+        )) {
             bones.splice(i, 1);
             if (lives < 3) {
                 lives++;
                 updateHUD();
-                createEffect(b.x + b.width/2, b.y + b.height/2, 'bone');
+                createEffect(b.x + b.width / 2, b.y + b.height / 2, 'bone');
             }
         }
     });
@@ -521,8 +633,12 @@ function rectIntersect(x1, y1, w1, h1, x2, y2, w2, h2) {
     return x2 < x1 + w1 && x2 + w2 > x1 && y2 < y1 + h1 && y2 + h2 > y1;
 }
 
+function distance(x1, y1, x2, y2) {
+    return Math.hypot(x2 - x1, y2 - y1);
+}
+
 function screenShake() {
-    canvas.style.transform = `translate(${Math.random()*10-5}px, ${Math.random()*10-5}px)`;
+    canvas.style.transform = `translate(${Math.random() * 10 - 5}px, ${Math.random() * 10 - 5}px)`;
     setTimeout(() => canvas.style.transform = 'none', 100);
 }
 
@@ -533,67 +649,157 @@ class Effect {
     constructor(x, y, type) {
         this.x = x;
         this.y = y;
-        this.type = type; // 'hit', 'collect' or 'bone'
-        this.life = 30;
-        this.maxLife = 30;
-        this.radius = type === 'hit' ? 20 : 10;
-        // for bone we will generate particles
+        this.type = type;
+        this.life = 40;
+        this.maxLife = 40;
+        this.radius = 20;
+
+        // 🦴 BONE EXPLOSION
         if (type === 'bone') {
             this.particles = [];
-            for (let i = 0; i < 12; i++) {
-                const angle = (Math.PI * 2 / 12) * i;
-                const speed = Math.random() * 2 + 1;
+            for (let i = 0; i < 20; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 4 + 2;
+
                 this.particles.push({
                     x: 0,
                     y: 0,
                     vx: Math.cos(angle) * speed,
                     vy: Math.sin(angle) * speed,
-                    color: `hsl(${Math.random()*60+30}, 100%, 50%)`
+                    size: Math.random() * 6 + 4,
+                    color: `hsl(${Math.random() * 60 + 30}, 100%, 60%)`
                 });
             }
+            this.ringRadius = 0;
+        }
+
+        // 🌿 REPEL BLAST
+        if (type === 'repelBlast') {
+            this.radius = 0;
+        }
+
+        // ➕ FLOATING +5
+        if (type === 'plusFive') {
+            this.floatY = y;
+        }
+
+        // ✨ FLOATING +10
+        if (type === 'collect') {
+            this.floatY = y;
         }
     }
 
     update() {
         this.life--;
+        const alpha = this.life / this.maxLife;
+
+        // 💥 HIT
         if (this.type === 'hit') {
-            this.radius += 1;
-        } else if (this.type === 'collect') {
-            this.radius += 0.5;
-        } else if (this.type === 'bone') {
+            this.radius += 2;
+        }
+
+        // ✨ COLLECT +10
+        if (this.type === 'collect') {
+            this.floatY -= 1;
+        }
+
+        // 🦴 BONE
+        else if (this.type === 'bone') {
+            this.ringRadius += 4;
+
             this.particles.forEach(p => {
                 p.x += p.vx;
                 p.y += p.vy;
-                p.vx *= 0.98;
-                p.vy *= 0.98;
+                p.vx *= 0.95;
+                p.vy *= 0.95;
+                p.size *= 0.95;
             });
+        }
+
+        // 🌿 REPEL BLAST
+        else if (this.type === 'repelBlast') {
+            this.radius += 6;
+        }
+
+        // ➕ PLUS FIVE
+        else if (this.type === 'plusFive') {
+            this.floatY -= 1.2;
+        }
+
+        // 🦟 MOSQUITO DEATH
+        else if (this.type === 'mosquitoDeath') {
+            this.radius += 1.5;
         }
     }
 
     draw() {
         const alpha = this.life / this.maxLife;
+
+        // 💥 HIT
         if (this.type === 'hit') {
-            ctx.strokeStyle = `rgba(255,0,0,${alpha})`;
+            ctx.fillStyle = `rgba(255, 0, 0, ${alpha * 0.4})`;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = `rgba(255, 50, 50, ${alpha})`;
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 5, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        // ✨ COLLECT +10
+        else if (this.type === 'collect') {
+            ctx.font = `bold ${20 * alpha}px Arial`;
+            ctx.fillStyle = `rgba(0,255,0,${alpha})`;
+            ctx.fillText("+10", this.x - 15, this.floatY);
+        }
+
+        // 🦴 BONE EXPLOSION
+        else if (this.type === 'bone') {
+
+            // anel dourado
+            ctx.strokeStyle = `rgba(255, 215, 0, ${alpha})`;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.ringRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // partículas
+            this.particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(this.x + p.x, this.y + p.y, p.size * alpha, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // 🌿 REPEL BLAST
+        else if (this.type === 'repelBlast') {
+            ctx.strokeStyle = `rgba(0,255,150,${alpha})`;
             ctx.lineWidth = 4;
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
             ctx.stroke();
-        } else if (this.type === 'collect') {
+        }
+
+        // ➕ PLUS FIVE
+        else if (this.type === 'plusFive') {
+            ctx.font = `bold ${18 * alpha}px Arial`;
             ctx.fillStyle = `rgba(0,255,0,${alpha})`;
+            ctx.fillText("+5", this.x - 12, this.floatY);
+        }
+
+        // 🦟 MOSQUITO DEATH
+        else if (this.type === 'mosquitoDeath') {
+            ctx.fillStyle = `rgba(255,0,0,${alpha})`;
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, this.radius * alpha, 0, Math.PI * 2);
             ctx.fill();
-        } else if (this.type === 'bone') {
-            this.particles.forEach(p => {
-                ctx.fillStyle = `${p.color.replace(', 1)', `, ${alpha})`)}`;
-                ctx.beginPath();
-                ctx.arc(this.x + p.x, this.y + p.y, 4 * alpha, 0, Math.PI * 2);
-                ctx.fill();
-            });
         }
     }
 }
-
 function createEffect(x, y, type) {
     effects.push(new Effect(x, y, type));
 }
@@ -615,7 +821,7 @@ function updateHUD() {
 function startGame() {
     startScreen.classList.add('hidden');
     gameOverScreen.classList.add('hidden');
-    
+
     score = 0;
     lives = 3;
     enemies = [];
@@ -627,7 +833,7 @@ function startGame() {
     speedMultiplier = 1;
     player = new Player();
     inputX = canvas.width / 2;
-    
+
     updateHUD();
     gameRunning = true;
     isPaused = false;
@@ -643,7 +849,7 @@ function gameOver() {
     // mostrar dica aleatória numerada
     const titleEl = document.getElementById('game-over-tip-title');
     const textEl = document.getElementById('game-over-tip-text');
-    if(titleEl && textEl) {
+    if (titleEl && textEl) {
         const randomIndex = Math.floor(Math.random() * preventionTips.length);
         titleEl.textContent = `Dica #${randomIndex + 1}`;
         textEl.textContent = preventionTips[randomIndex];
@@ -653,7 +859,7 @@ function gameOver() {
 
 // Tecla Escape para pause (PC)
 window.addEventListener('keydown', (e) => {
-    if(e.key === 'Escape' && gameRunning && !isPaused) {
+    if (e.key === 'Escape' && gameRunning && !isPaused) {
         isPaused = true;
         pauseScreen.classList.remove('hidden');
     }
