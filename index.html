@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cão Fiel: Proteja-se do Mosquito Palha</title>
+    <title>Leishmaniose Run: Proteja-se do Mosquito Palha</title>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="assets/logo.png" type="image/png">
 </head>
+
 <body>
 
     <div id="game-container">
@@ -15,7 +18,9 @@
         <!-- HUD -->
         <div id="ui-layer">
             <div class="top-bar">
-                <button id="pause-btn" class="icon-btn">⏸️</button>
+                <button id="pause-btn" class="icon-btn pause-btn" aria-label="Pausar" title="Pausar o jogo">
+                    <img id="pause-icon" src="assets/pause.png" alt="Pausar" width="50" height="50">
+                </button>
                 <div class="stats">
                     <span id="scoreDisplay">Pontos: 0</span>
                     <span id="healthDisplay">❤️❤️❤️</span>
@@ -26,13 +31,16 @@
         <!-- Tela Inicial -->
         <div id="start-screen" class="overlay">
             <div class="menu-content">
-                <h1>🐕 CÃO FIEL</h1>
-                <p class="subtitle">Leishmaniose: Um jogo de prevenção</p>
-                
+                <img src="assets/logo.png" alt="" width="300px" height="300px">
+                <p class="subtitle">Um jogo de prevenção</p>
+
                 <div class="instructions">
                     <p>Arraste para <strong>mover o cão</strong>.</p>
                     <p>Evite o <strong>Mosquito Palha</strong> 🦟</p>
-                    <p>Colete <strong>Repelentes</strong> 🧴</p>
+                    <p>Colete <strong>Repelentes</strong> <img src="assets/repelente.png" alt="Repelente"
+                            class="instr-icon"></p>
+                    <p>Colete <strong>Ossos</strong> para recuperar vidas perdidas <img src="assets/osso.png" alt="Osso"
+                            class="instr-icon"></p>
                 </div>
 
                 <div class="btn-group">
@@ -45,7 +53,7 @@
         <!-- Menu de Pause -->
         <div id="pause-screen" class="overlay hidden">
             <div class="menu-content">
-                <h2>⏸️ PAUSE</h2>
+                <h2>PAUSE</h2>
                 <div class="btn-group">
                     <button onclick="resumeGame()" class="btn-primary">CONTINUAR</button>
                     <button onclick="window.location.href='info.html'" class="btn-secondary">📚 INFO</button>
@@ -57,8 +65,12 @@
         <!-- Game Over -->
         <div id="game-over-screen" class="overlay hidden">
             <div class="menu-content">
-                <h2>😢 FIM DE JOGO</h2>
+                <h2>FIM DE JOGO</h2>
                 <p class="score-final">Pontuação: <span id="final-score">0</span></p>
+                <div id="game-over-tip-box" class="game-tip-box">
+                    <h3 id="game-over-tip-title" class="game-tip-title"></h3>
+                    <p id="game-over-tip-text" class="game-tip-text"></p>
+                </div>
                 <div class="btn-group">
                     <button onclick="startGame()" class="btn-primary">TENTAR NOVAMENTE</button>
                     <button onclick="window.location.href='index.html'" class="btn-secondary">MENU</button>
@@ -69,4 +81,5 @@
 
     <script src="game.js"></script>
 </body>
+
 </html>
